@@ -38,57 +38,57 @@ if uploaded_file is not None:
             .astype(str)
             .str.replace(".", "", regex=False)
             .str.replace(",", ".", regex=False)
-        )
-        df["TRANS_AMOUNT"] = pd.to_numeric(df["TRANS_AMOUNT"], errors="coerce")
 
-    if "FEE_AMOUNT" in df.columns:
-        df["FEE_AMOUNT"] = (
-            df["FEE_AMOUNT"]
-            .astype(str)
-            .str.replace(".", "", regex=False)
-            .str.replace(",", ".", regex=False)
-        )
-        df["FEE_AMOUNT"] = pd.to_numeric(df["FEE_AMOUNT"], errors="coerce")
+            coloane_export = [
+    "TERMINAL_ID", "DEVICE_NAME", "DEVICE_CITY", "TRANSACTION_ID",
+    "TRANS_DATE", "POSTING_DATE", "TRANS_AMOUNT", "CASHBACK_AMOUNT",
+    "TRANS_CURR", "TARGET_TYPE", "TRANS_TYPE", "MESSAGE_TYPE",
+    "REQUEST_CATEGORY", "CARD_NUMBER", "AUTH_CODE", "RET_REF_NUMBER",
+    "FEE_AMOUNT", "FEE_CURRENCY", "CARD_PRODUCT_TYPE", "CARD_TYPE",
+    "INSTL_NO", "INSTL_FEE_PERC", "CARD_ORGANIZATION", "ACCOUNT_NO"
+]
 
-    # Filtrare dupa lista terminale
-    if terminal_file is not None:
+df_export = df[coloane_export]
 
-        if terminal_file.name.endswith(".csv"):
-            terminals_df = pd.read_csv(terminal_file)
-        else:
-            terminals_df = pd.read_excel(terminal_file)
+st.subheader("Date complete (exact cum ai cerut)")
+st.dataframe(df_export, use_container_width=True)
 
-        terminal_list = terminals_df["TERMINAL_ID"].astype(str).tolist()
-        df = df[df["TERMINAL_ID"].astype(str).isin(terminal_list)]
+# 🔹 GRUPARE DUPA DEVICE_NAME
+grouped = df.groupby("DEVICE_NAME").agg(
+    TOTAL_TRANS_AMOUNT=("TRANS_AMOUNT", "sum"),
+    TOTAL_FEE_AMOUNT=("FEE_AMOUNT", "sum"),
+    NR_TRANZACTII=("TRANSACTION_ID", "count"),
+    TERMINALE_DISTINCTE=("TERMINAL_ID", "nunique")
+).reset_index()
 
-        st.success(f"Filtrare aplicata pentru {len(terminal_list)} terminale")
+# Calcul medii
+grouped["MEDIA_FEE_PER_TRANZACTIE"] = (
+    grouped["TOTAL_FEE_AMOUNT"] / grouped["NR_TRANZACTII"]
+)
 
-    # Grupare
-    grouped = df.groupby("TERMINAL_ID").agg(
-        TOTAL_TRANS_AMOUNT=("TRANS_AMOUNT", "sum"),
-        TOTAL_FEE_AMOUNT=("FEE_AMOUNT", "sum"),
-        NR_TRANZACTII=("FEE_AMOUNT", "count"),
-        MEDIA_FEE_AMOUNT=("FEE_AMOUNT", "mean")
-    ).reset_index()
+grouped["MEDIA_FEE_PER_TERMINAL"] = (
+    grouped["TOTAL_FEE_AMOUNT"] / grouped["TERMINALE_DISTINCTE"]
+)
 
-    st.subheader("Rezultate centralizate")
-    st.dataframe(grouped, use_container_width=True)
+st.subheader("Centralizare pe DEVICE_NAME")
+st.dataframe(grouped, use_container_width=True)
 
-    # Total general
-    st.subheader("Total General")
+# Export fisier detaliat
+csv_detaliat = df_export.to_csv(index=False).encode("utf-8")
+st.download_button(
+    "⬇️ Descarca fisierul detaliat",
+    csv_detaliat,
+    "export_detaliat.csv",
+    "text/csv"
+)
 
-    total_trans = grouped["TOTAL_TRANS_AMOUNT"].sum()
-    total_fee = grouped["TOTAL_FEE_AMOUNT"].sum()
-
-    col1, col2 = st.columns(2)
-    col1.metric("Total TRANS_AMOUNT", f"{total_trans:,.2f}")
-    col2.metric("Total FEE_AMOUNT", f"{total_fee:,.2f}")
-
-    # Export
-    csv = grouped.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        "⬇️ Descarca rezultatele",
-        csv,
-        "centralizator_rezultate.csv",
-        "text/csv"
-    )
+# Export fisier centralizat
+csv_centralizat = grouped.to_csv(index=False).encode("utf-8")
+st.download_button(
+    "⬇️ Descarca centralizarea pe DEVICE_NAME",
+    csv_centralizat,
+    "centralizare_device_name.csv",
+    "text/csv"
+)
+       
+   
