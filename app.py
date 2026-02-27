@@ -1,6 +1,3 @@
-import streamlit as st
-import pandas as pd
-
 st.set_page_config(page_title="Centralizator Tranzactii", layout="wide")
 
 st.title("📊 Centralizator Tranzactii POS")
@@ -11,7 +8,7 @@ uploaded_file = st.file_uploader("Incarca fisierul CSV de la banca", type=["csv"
 # Upload lista terminale
 terminal_file = st.file_uploader("Incarca lista TERMINAL_ID (optional)", type=["csv", "xlsx"])
 
-if uploaded_file:
+ uploaded_file:
 
     df = pd.read_csv(uploaded_file)
 
@@ -20,10 +17,9 @@ if uploaded_file:
     df["FEE_AMOUNT"] = pd.to_numeric(df["FEE_AMOUNT"], errors="coerce")
 
     # Daca exista lista de terminale
-    if terminal_file:
-        if terminal_file.name.endswith(".csv"):
+     terminal_file:
+         terminal_file.name.endswith(".csv"):
             terminals_df = pd.read_csv(terminal_file)
-        else:
             terminals_df = pd.read_excel(terminal_file)
 
         terminal_list = terminals_df["TERMINAL_ID"].astype(str).tolist()
@@ -64,14 +60,9 @@ if uploaded_file:
 stringio = io.StringIO(uploaded_file.getvalue().decode("utf-8"))
 df = pd.read_csv(stringio, sep=None, engine="python")
 
-
-
-  
         stringio = io.StringIO(uploaded_file.getvalue().decode("utf-8"))
         df = pd.read_csv(stringio, sep=None, engine="python")
-    
-        
+
             stringio = io.StringIO(uploaded_file.getvalue().decode("utf-16"))
             df = pd.read_csv(stringio, sep=";")
-     
             df = pd.read_csv(uploaded_file, sep=";", encoding="latin1")
