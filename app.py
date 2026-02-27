@@ -1,6 +1,6 @@
- streamlit st
-pandas pd
- io
+import streamlit as st
+import pandas as pd
+import io
 
 st.set_page_config(page_title="Centralizator Tranzactii", layout="wide")
 
