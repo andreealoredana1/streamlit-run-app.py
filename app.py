@@ -3,18 +3,15 @@ import pandas as pd
 import json
 import os
 
-st.set_page_config(page_title="Centralizator Tranzactii", layout="wide")
+st.set_page_config(page_title="Centralizator Tranzactii POS", layout="wide")
 st.title("📊 Centralizator Tranzactii POS")
 
 # -----------------------------
-# Fisiere de salvare persistenta
+# Fisiere persistenta
 # -----------------------------
 TID_FILE = "tid_list.json"
 COMISION_FILE = "comisioane.json"
 
-# -----------------------------
-# Functii helper
-# -----------------------------
 def load_json(file, default):
     if os.path.exists(file):
         with open(file, "r", encoding="utf-8") as f:
@@ -26,15 +23,11 @@ def save_json(file, data):
     with open(file, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-# -----------------------------
-# Incarcare TID-uri si comisioane
-# -----------------------------
-tid_list = load_json(TID_FILE, {})  # dict: TERMINAL_ID -> DEVICE_NAME
-comisioane = load_json(COMISION_FILE, {})  
-# dict: DEVICE_NAME -> {"≥10": procent, "<10": procent}
+tid_list = load_json(TID_FILE, {})          # TERMINAL_ID -> DEVICE_NAME
+comisioane = load_json(COMISION_FILE, {})   # DEVICE_NAME -> {"10+": %, "<10": %}
 
 # -----------------------------
-# Adaugare manuala TID-uri noi
+# Sidebar: Adaugare manuala TID
 # -----------------------------
 st.sidebar.header("➕ Adauga TID manual")
 with st.sidebar.form("form_tid"):
@@ -48,7 +41,7 @@ with st.sidebar.form("form_tid"):
             st.success(f"TID {new_tid} salvat cu DEVICE_NAME {new_device}")
 
 # -----------------------------
-# Adaugare comisioane noi
+# Sidebar: Seteaza comisioane
 # -----------------------------
 st.sidebar.header("💰 Seteaza comisioane per client")
 with st.sidebar.form("form_com"):
@@ -61,6 +54,25 @@ with st.sidebar.form("form_com"):
             comisioane[device] = {"10+": com_10, "<10": com_10m}
             save_json(COMISION_FILE, comisioane)
             st.success(f"Comisioane pentru {device} salvate!")
+
+# -----------------------------
+# Sidebar: Administrare TID-uri
+# -----------------------------
+st.sidebar.header("🛠 Administrare TID-uri existente")
+if st.sidebar.button("Editeaza / Sterge TID-uri"):
+    st.subheader("Lista TID-uri salvate")
+    tid_df = pd.DataFrame(list(tid_list.items()), columns=["TERMINAL_ID", "DEVICE_NAME"])
+    edited_df = st.data_editor(
+        tid_df,
+        num_rows="dynamic",
+        use_container_width=True,
+        key="editor_tid"
+    )
+    st.write("✅ Apasa butonul pentru a salva modificarile")
+    if st.button("Salveaza TID-uri modificate"):
+        tid_list = dict(zip(edited_df["TERMINAL_ID"], edited_df["DEVICE_NAME"]))
+        save_json(TID_FILE, tid_list)
+        st.success("TID-urile au fost actualizate si salvate cu succes!")
 
 # -----------------------------
 # Upload CSV
@@ -102,7 +114,6 @@ if uploaded_file is not None:
             else:
                 return round(amt * comisioane[device]["<10"] / 100, 2)
         else:
-            # comision default daca nu e setat: 1% ≥10, 2% <10
             if amt >= 10:
                 return round(amt * 1 / 100, 2)
             else:
