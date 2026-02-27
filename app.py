@@ -37,22 +37,25 @@ tab = st.sidebar.radio("Selectează secțiunea", ["📁 TID-uri", "💰 Comisioa
 # -----------------------------
 if tab == "📁 TID-uri":
     st.subheader("📁 Administrare TID-uri")
-    
+
     # Upload XLSX TID-uri
     uploaded_tid_file = st.file_uploader(
         "Încarcă XLSX cu TID-uri și DEVICE_NAME",
         type=["xlsx"]
     )
     if uploaded_tid_file is not None:
-        tid_df = pd.read_excel(uploaded_tid_file)
-        if "TERMINAL_ID" in tid_df.columns and "DEVICE_NAME" in tid_df.columns:
-            tid_new = dict(zip(tid_df["TERMINAL_ID"], tid_df["DEVICE_NAME"]))
-            tid_list.update(tid_new)
-            save_json(TID_FILE, tid_list)
-            st.success(f"{len(tid_new)} TID-uri încărcate și salvate cu succes!")
-        else:
-            st.error("Fisierul XLSX trebuie să conțină coloanele: TERMINAL_ID și DEVICE_NAME")
-    
+        try:
+            tid_df = pd.read_excel(uploaded_tid_file)
+            if "TERMINAL_ID" in tid_df.columns and "DEVICE_NAME" in tid_df.columns:
+                tid_new = dict(zip(tid_df["TERMINAL_ID"], tid_df["DEVICE_NAME"]))
+                tid_list.update(tid_new)
+                save_json(TID_FILE, tid_list)
+                st.success(f"{len(tid_new)} TID-uri încărcate și salvate cu succes!")
+            else:
+                st.error("Fișierul XLSX trebuie să conțină coloanele: TERMINAL_ID și DEVICE_NAME")
+        except ImportError:
+            st.error("Nu ai instalat openpyxl. Rulează: pip install openpyxl")
+
     # Administrare TID-uri existente
     tid_df_view = pd.DataFrame(list(tid_list.items()), columns=["TERMINAL_ID", "DEVICE_NAME"])
     edited_df = st.data_editor(
@@ -70,21 +73,24 @@ if tab == "📁 TID-uri":
 # -----------------------------
 elif tab == "💰 Comisioane":
     st.subheader("💰 Setare Comisioane per client")
-    
+
     uploaded_com_file = st.file_uploader(
         "Încarcă XLSX cu DEVICE_NAME și comisioane",
         type=["xlsx"]
     )
     if uploaded_com_file is not None:
-        com_df = pd.read_excel(uploaded_com_file)
-        if {"DEVICE_NAME", "COM_10", "COM_LT10"}.issubset(com_df.columns):
-            for _, row in com_df.iterrows():
-                comisioane[row["DEVICE_NAME"]] = {"10+": float(row["COM_10"]), "<10": float(row["COM_LT10"])}
-            save_json(COMISION_FILE, comisioane)
-            st.success(f"{len(com_df)} comisioane încărcate și salvate cu succes!")
-        else:
-            st.error("Fisierul XLSX trebuie să conțină coloanele: DEVICE_NAME, COM_10, COM_LT10")
-    
+        try:
+            com_df = pd.read_excel(uploaded_com_file)
+            if {"DEVICE_NAME", "COM_10", "COM_LT10"}.issubset(com_df.columns):
+                for _, row in com_df.iterrows():
+                    comisioane[row["DEVICE_NAME"]] = {"10+": float(row["COM_10"]), "<10": float(row["COM_LT10"])}
+                save_json(COMISION_FILE, comisioane)
+                st.success(f"{len(com_df)} comisioane încărcate și salvate cu succes!")
+            else:
+                st.error("Fisierul XLSX trebuie să conțină coloanele: DEVICE_NAME, COM_10, COM_LT10")
+        except ImportError:
+            st.error("Nu ai instalat openpyxl. Rulează: pip install openpyxl")
+
     # Editare manuală comisioane
     com_df_view = pd.DataFrame([
         {"DEVICE_NAME": k, "COM_10": v["10+"], "COM_LT10": v["<10"]}
@@ -105,7 +111,7 @@ elif tab == "💰 Comisioane":
 # -----------------------------
 elif tab == "📊 Tranzacții":
     st.subheader("📊 Upload CSV Tranzacții")
-    
+
     uploaded_file = st.file_uploader("Încarcă fișierul CSV de la bancă", type=["csv"])
     if uploaded_file is not None:
         try:
@@ -123,7 +129,7 @@ elif tab == "📊 Tranzacții":
                     .str.replace(",", ".", regex=False)
                 )
                 df[col] = pd.to_numeric(df[col], errors="coerce").round(2)
-        
+
         # Adăugare DEVICE_NAME din TID-uri
         df["DEVICE_NAME"] = df["TERMINAL_ID"].map(tid_list).fillna(df.get("DEVICE_NAME", ""))
 
