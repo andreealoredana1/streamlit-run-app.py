@@ -3,11 +3,11 @@ import pandas as pd
 import json
 import os
 
-st.set_page_config(page_title="Centralizator Tranzactii POS", layout="wide")
-st.title("📊 Centralizator Tranzactii POS")
+st.set_page_config(page_title="Centralizator POS Automat", layout="wide")
+st.title("📊 Centralizator Tranzacții POS Automat")
 
 # -----------------------------
-# Fisiere persistenta
+# Fisiere persistente
 # -----------------------------
 TID_FILE = "tid_list.json"
 COMISION_FILE = "comisioane.json"
@@ -33,87 +33,80 @@ st.sidebar.header("⚙️ Navigare Secțiuni")
 tab = st.sidebar.radio("Selectează secțiunea", ["📁 TID-uri", "💰 Comisioane", "📊 Tranzacții"])
 
 # -----------------------------
-# TAB 1: TID-uri
+# TAB 1: TID-uri XLSX
 # -----------------------------
 if tab == "📁 TID-uri":
-    st.subheader("📁 Administrare TID-uri")
+    st.subheader("📁 Încărcare și administrare TID-uri")
 
-    # Upload XLSX TID-uri
     uploaded_tid_file = st.file_uploader(
         "Încarcă XLSX cu TID-uri și DEVICE_NAME",
         type=["xlsx"]
     )
-    if uploaded_tid_file is not None:
+    if uploaded_tid_file:
         try:
             tid_df = pd.read_excel(uploaded_tid_file)
             if "TERMINAL_ID" in tid_df.columns and "DEVICE_NAME" in tid_df.columns:
                 tid_new = dict(zip(tid_df["TERMINAL_ID"], tid_df["DEVICE_NAME"]))
                 tid_list.update(tid_new)
                 save_json(TID_FILE, tid_list)
-                st.success(f"{len(tid_new)} TID-uri încărcate și salvate cu succes!")
+                st.success(f"{len(tid_new)} TID-uri încărcate și salvate!")
             else:
                 st.error("Fișierul XLSX trebuie să conțină coloanele: TERMINAL_ID și DEVICE_NAME")
         except ImportError:
             st.error("Nu ai instalat openpyxl. Rulează: pip install openpyxl")
 
-    # Administrare TID-uri existente
     tid_df_view = pd.DataFrame(list(tid_list.items()), columns=["TERMINAL_ID", "DEVICE_NAME"])
     edited_df = st.data_editor(
-        tid_df_view,
-        num_rows="dynamic",
-        use_container_width=True
+        tid_df_view, num_rows="dynamic", use_container_width=True
     )
-    if st.button("Salvează modificările TID"):
+    if st.button("💾 Salvează modificările TID"):
         tid_list = dict(zip(edited_df["TERMINAL_ID"], edited_df["DEVICE_NAME"]))
         save_json(TID_FILE, tid_list)
-        st.success("TID-urile au fost actualizate și salvate cu succes!")
+        st.success("TID-urile au fost actualizate!")
 
 # -----------------------------
-# TAB 2: Comisioane
+# TAB 2: Comisioane XLSX
 # -----------------------------
 elif tab == "💰 Comisioane":
-    st.subheader("💰 Setare Comisioane per client")
+    st.subheader("💰 Încărcare și administrare comisioane")
 
     uploaded_com_file = st.file_uploader(
         "Încarcă XLSX cu DEVICE_NAME și comisioane",
         type=["xlsx"]
     )
-    if uploaded_com_file is not None:
+    if uploaded_com_file:
         try:
             com_df = pd.read_excel(uploaded_com_file)
             if {"DEVICE_NAME", "COM_10", "COM_LT10"}.issubset(com_df.columns):
                 for _, row in com_df.iterrows():
                     comisioane[row["DEVICE_NAME"]] = {"10+": float(row["COM_10"]), "<10": float(row["COM_LT10"])}
                 save_json(COMISION_FILE, comisioane)
-                st.success(f"{len(com_df)} comisioane încărcate și salvate cu succes!")
+                st.success(f"{len(com_df)} comisioane încărcate și salvate!")
             else:
                 st.error("Fisierul XLSX trebuie să conțină coloanele: DEVICE_NAME, COM_10, COM_LT10")
         except ImportError:
             st.error("Nu ai instalat openpyxl. Rulează: pip install openpyxl")
 
-    # Editare manuală comisioane
     com_df_view = pd.DataFrame([
         {"DEVICE_NAME": k, "COM_10": v["10+"], "COM_LT10": v["<10"]}
         for k, v in comisioane.items()
     ])
     edited_com = st.data_editor(
-        com_df_view,
-        num_rows="dynamic",
-        use_container_width=True
+        com_df_view, num_rows="dynamic", use_container_width=True
     )
-    if st.button("Salvează modificările comisioane"):
+    if st.button("💾 Salvează modificările comisioane"):
         comisioane = {row["DEVICE_NAME"]: {"10+": float(row["COM_10"]), "<10": float(row["COM_LT10"])} for _, row in edited_com.iterrows()}
         save_json(COMISION_FILE, comisioane)
-        st.success("Comisioanele au fost actualizate și salvate cu succes!")
+        st.success("Comisioanele au fost actualizate!")
 
 # -----------------------------
-# TAB 3: Tranzactii
+# TAB 3: Tranzacții CSV
 # -----------------------------
 elif tab == "📊 Tranzacții":
     st.subheader("📊 Upload CSV Tranzacții")
 
-    uploaded_file = st.file_uploader("Încarcă fișierul CSV de la bancă", type=["csv"])
-    if uploaded_file is not None:
+    uploaded_file = st.file_uploader("Încarcă fișierul CSV", type=["csv"])
+    if uploaded_file:
         try:
             df = pd.read_csv(uploaded_file, sep=None, engine="python")
         except:
@@ -130,10 +123,10 @@ elif tab == "📊 Tranzacții":
                 )
                 df[col] = pd.to_numeric(df[col], errors="coerce").round(2)
 
-        # Adăugare DEVICE_NAME din TID-uri
+        # Recunoaște DEVICE_NAME din TID-uri
         df["DEVICE_NAME"] = df["TERMINAL_ID"].map(tid_list).fillna(df.get("DEVICE_NAME", ""))
 
-        # Calcul comision per tranzactie
+        # Calcul comision
         def calc_comision(row):
             device = row["DEVICE_NAME"]
             amt = row["TRANS_AMOUNT"]
@@ -143,10 +136,8 @@ elif tab == "📊 Tranzacții":
                 else:
                     return round(amt * comisioane[device]["<10"] / 100, 2)
             else:
-                if amt >= 10:
-                    return round(amt * 1 / 100, 2)
-                else:
-                    return round(amt * 2 / 100, 2)
+                # valori implicite
+                return round(amt * 1 / 100 if amt >= 10 else amt * 2 / 100, 2)
         df["COMISION_CALCULAT"] = df.apply(calc_comision, axis=1)
 
         # Grupare per TERMINAL_ID + DEVICE_NAME
@@ -161,7 +152,7 @@ elif tab == "📊 Tranzacții":
         grouped["TOTAL_COMISION"] = grouped["TOTAL_COMISION"].round(2)
         grouped["TOTAL_FEE"] = grouped["TOTAL_FEE"].round(2)
 
-        st.subheader("📊 Centralizare per client (TID + DEVICE_NAME)")
+        st.subheader("📊 Centralizare per client")
         st.dataframe(grouped, use_container_width=True)
 
         # Export CSV detaliat
