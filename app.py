@@ -1,25 +1,61 @@
+import streamlit as st
+import pandas as pd
+import io
+
 st.set_page_config(page_title="Centralizator Tranzactii", layout="wide")
 
 st.title("📊 Centralizator Tranzactii POS")
 
 # Upload fisier principal
-uploaded_file = st.file_uploader("Incarca fisierul CSV de la banca", type=["csv"])
+uploaded_file = st.file_uploader(
+    "Incarca fisierul CSV de la banca",
+    type=["csv"]
+)
 
 # Upload lista terminale
-terminal_file = st.file_uploader("Incarca lista TERMINAL_ID (optional)", type=["csv", "xlsx"])
+terminal_file = st.file_uploader(
+    "Incarca lista TERMINAL_ID (optional)",
+    type=["csv", "xlsx"]
+)
 
- uploaded_file:
+if uploaded_file is not None:
 
-    df = pd.read_csv(uploaded_file)
+    # Citire fisier robusta
+    try:
+        stringio = io.StringIO(uploaded_file.getvalue().decode("utf-8"))
+        df = pd.read_csv(stringio, sep=None, engine="python")
+    except:
+        try:
+            stringio = io.StringIO(uploaded_file.getvalue().decode("utf-16"))
+            df = pd.read_csv(stringio, sep=";")
+        except:
+            df = pd.read_csv(uploaded_file, sep=";", encoding="latin1")
 
     # Curatare coloane numerice
-    df["TRANS_AMOUNT"] = pd.to_numeric(df["TRANS_AMOUNT"], errors="coerce")
-    df["FEE_AMOUNT"] = pd.to_numeric(df["FEE_AMOUNT"], errors="coerce")
+    if "TRANS_AMOUNT" in df.columns:
+        df["TRANS_AMOUNT"] = (
+            df["TRANS_AMOUNT"]
+            .astype(str)
+            .str.replace(".", "", regex=False)
+            .str.replace(",", ".", regex=False)
+        )
+        df["TRANS_AMOUNT"] = pd.to_numeric(df["TRANS_AMOUNT"], errors="coerce")
 
-    # Daca exista lista de terminale
-     terminal_file:
-         terminal_file.name.endswith(".csv"):
+    if "FEE_AMOUNT" in df.columns:
+        df["FEE_AMOUNT"] = (
+            df["FEE_AMOUNT"]
+            .astype(str)
+            .str.replace(".", "", regex=False)
+            .str.replace(",", ".", regex=False)
+        )
+        df["FEE_AMOUNT"] = pd.to_numeric(df["FEE_AMOUNT"], errors="coerce")
+
+    # Filtrare dupa lista terminale
+    if terminal_file is not None:
+
+        if terminal_file.name.endswith(".csv"):
             terminals_df = pd.read_csv(terminal_file)
+        else:
             terminals_df = pd.read_excel(terminal_file)
 
         terminal_list = terminals_df["TERMINAL_ID"].astype(str).tolist()
@@ -40,6 +76,7 @@ terminal_file = st.file_uploader("Incarca lista TERMINAL_ID (optional)", type=["
 
     # Total general
     st.subheader("Total General")
+
     total_trans = grouped["TOTAL_TRANS_AMOUNT"].sum()
     total_fee = grouped["TOTAL_FEE_AMOUNT"].sum()
 
@@ -53,16 +90,5 @@ terminal_file = st.file_uploader("Incarca lista TERMINAL_ID (optional)", type=["
         "⬇️ Descarca rezultatele",
         csv,
         "centralizator_rezultate.csv",
-        "text/csv",
+        "text/csv"
     )
-
-# Citire automata separator
-stringio = io.StringIO(uploaded_file.getvalue().decode("utf-8"))
-df = pd.read_csv(stringio, sep=None, engine="python")
-
-        stringio = io.StringIO(uploaded_file.getvalue().decode("utf-8"))
-        df = pd.read_csv(stringio, sep=None, engine="python")
-
-            stringio = io.StringIO(uploaded_file.getvalue().decode("utf-16"))
-            df = pd.read_csv(stringio, sep=";")
-            df = pd.read_csv(uploaded_file, sep=";", encoding="latin1")
