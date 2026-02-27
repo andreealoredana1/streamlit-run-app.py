@@ -60,7 +60,6 @@ if uploaded_file:
         "text/csv",
     )
 
-try:
-    df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8")
-except:
-    df = pd.read_csv(uploaded_file, sep=";", encoding="latin1")
+# Citire automata separator
+stringio = io.StringIO(uploaded_file.getvalue().decode("utf-8"))
+df = pd.read_csv(stringio, sep=None, engine="python")
