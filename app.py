@@ -23,6 +23,9 @@ def save_json(file, data):
     with open(file, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
+# -----------------------------
+# Incarcare TID-uri si comisioane existente
+# -----------------------------
 tid_list = load_json(TID_FILE, {})          # TERMINAL_ID -> DEVICE_NAME
 comisioane = load_json(COMISION_FILE, {})   # DEVICE_NAME -> {"10+": %, "<10": %}
 
@@ -42,9 +45,10 @@ if st.sidebar.button("📁 Incarca TID-uri XLSX", key="btn_tid_xlsx"):
         tid_df = pd.read_excel(uploaded_tid_file)
         if "TERMINAL_ID" in tid_df.columns and "DEVICE_NAME" in tid_df.columns:
             tid_new = dict(zip(tid_df["TERMINAL_ID"], tid_df["DEVICE_NAME"]))
-            tid_list.update(tid_new)
-            save_json(TID_FILE, tid_list)
+            tid_list.update(tid_new)  # adauga / suprascrie TID-uri existente
+            save_json(TID_FILE, tid_list)  # salvare permanenta
             st.success(f"{len(tid_new)} TID-uri incarcate si salvate cu succes!")
+            st.dataframe(tid_df)
         else:
             st.error("Fisierul XLSX trebuie sa contina coloanele: TERMINAL_ID si DEVICE_NAME")
 
@@ -62,6 +66,7 @@ if st.sidebar.button("💰 Incarca Comisioane XLSX", key="btn_com_xlsx"):
                 comisioane[row["DEVICE_NAME"]] = {"10+": float(row["COM_10"]), "<10": float(row["COM_LT10"])}
             save_json(COMISION_FILE, comisioane)
             st.success(f"{len(com_df)} comisioane incarcate si salvate cu succes!")
+            st.dataframe(com_df)
         else:
             st.error("Fisierul XLSX trebuie sa contina coloanele: DEVICE_NAME, COM_10, COM_LT10")
 
@@ -148,7 +153,7 @@ if uploaded_file is not None:
     # -----------------------------
     # Export CSV detaliat
     # -----------------------------
-    csv_detaliat = df.to_csv(index=False).encode("utf-8")
+    csv_detaliat = df.to_csv(index=False, sep=";", decimal=",").encode("utf-8")
     st.download_button(
         "⬇️ Descarca fisierul detaliat",
         csv_detaliat,
@@ -159,7 +164,7 @@ if uploaded_file is not None:
     # -----------------------------
     # Export CSV centralizare
     # -----------------------------
-    csv_centralizat = grouped.to_csv(index=False).encode("utf-8")
+    csv_centralizat = grouped.to_csv(index=False, sep=";", decimal=",").encode("utf-8")
     st.download_button(
         "⬇️ Descarca centralizarea",
         csv_centralizat,
