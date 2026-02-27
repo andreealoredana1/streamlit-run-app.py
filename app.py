@@ -142,9 +142,14 @@ if uploaded_file is not None:
     st.dataframe(grouped, use_container_width=True)
 
     # -----------------------------
-    # Export CSV detaliat
+    # Export CSV detaliat pentru Excel cu virgula zecimala
     # -----------------------------
-    csv_detaliat = df.to_csv(index=False).encode("utf-8")
+    df_export = df.copy()
+    for col in ["TRANS_AMOUNT", "FEE_AMOUNT", "COMISION_CALCULAT"]:
+        if col in df_export.columns:
+            df_export[col] = df_export[col].apply(lambda x: f"{x:.2f}".replace('.', ','))
+
+    csv_detaliat = df_export.to_csv(index=False, sep=';', encoding='utf-8')
     st.download_button(
         "⬇️ Descarca fisierul detaliat",
         csv_detaliat,
@@ -153,9 +158,13 @@ if uploaded_file is not None:
     )
 
     # -----------------------------
-    # Export CSV centralizare
+    # Export CSV centralizare cu virgula
     # -----------------------------
-    csv_centralizat = grouped.to_csv(index=False).encode("utf-8")
+    grouped_export = grouped.copy()
+    for col in ["TOTAL_TRANS_AMOUNT", "TOTAL_COMISION", "TOTAL_FEE"]:
+        grouped_export[col] = grouped_export[col].apply(lambda x: f"{x:.2f}".replace('.', ','))
+
+    csv_centralizat = grouped_export.to_csv(index=False, sep=';', encoding='utf-8')
     st.download_button(
         "⬇️ Descarca centralizarea",
         csv_centralizat,
