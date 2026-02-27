@@ -63,3 +63,15 @@ if uploaded_file:
 # Citire automata separator
 stringio = io.StringIO(uploaded_file.getvalue().decode("utf-8"))
 df = pd.read_csv(stringio, sep=None, engine="python")
+
+
+
+  
+        stringio = io.StringIO(uploaded_file.getvalue().decode("utf-8"))
+        df = pd.read_csv(stringio, sep=None, engine="python")
+    
+        
+            stringio = io.StringIO(uploaded_file.getvalue().decode("utf-16"))
+            df = pd.read_csv(stringio, sep=";")
+     
+            df = pd.read_csv(uploaded_file, sep=";", encoding="latin1")
