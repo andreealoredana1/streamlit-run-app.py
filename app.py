@@ -59,3 +59,8 @@ if uploaded_file:
         "centralizator_rezultate.csv",
         "text/csv",
     )
+
+try:
+    df = pd.read_csv(uploaded_file, sep=";", encoding="utf-8")
+except:
+    df = pd.read_csv(uploaded_file, sep=";", encoding="latin1")
