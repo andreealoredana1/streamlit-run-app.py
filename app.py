@@ -3,6 +3,9 @@ import pandas as pd
 import json
 import os
 
+# -----------------------------
+# Setari pagina
+# -----------------------------
 st.set_page_config(page_title="Centralizator Tranzactii POS", layout="wide")
 st.title("📊 Centralizator Tranzactii POS")
 
@@ -27,11 +30,13 @@ tid_list = load_json(TID_FILE, {})          # TERMINAL_ID -> DEVICE_NAME
 comisioane = load_json(COMISION_FILE, {})   # DEVICE_NAME -> {"10+": %, "<10": %}
 
 # -----------------------------
-# Sidebar: Navigare butoane mari
+# Sidebar: Navigare
 # -----------------------------
 st.sidebar.header("⚙️ Meniu Principal")
 
-# 1️⃣ Upload XLSX TID-uri
+# -----------------------------
+# 1️⃣ Buton incarcare XLSX cu TID-uri
+# -----------------------------
 st.sidebar.subheader("📁 TID-uri")
 uploaded_tid_file = st.sidebar.file_uploader(
     "Incarca XLSX cu TID-uri si DEVICE_NAME",
@@ -44,11 +49,13 @@ if uploaded_tid_file is not None:
         tid_new = dict(zip(tid_df["TERMINAL_ID"], tid_df["DEVICE_NAME"]))
         tid_list.update(tid_new)
         save_json(TID_FILE, tid_list)
-        st.success(f"{len(tid_new)} TID-uri incarcate si salvate cu succes!")
+        st.success(f"{len(tid_new)} TID-uri incarcate si salvate!")
     else:
         st.error("Fisierul XLSX trebuie sa contina coloanele: TERMINAL_ID si DEVICE_NAME")
 
-# 2️⃣ Upload XLSX Comisioane
+# -----------------------------
+# 2️⃣ Buton incarcare XLSX cu Comisioane
+# -----------------------------
 st.sidebar.subheader("💰 Comisioane")
 uploaded_com_file = st.sidebar.file_uploader(
     "Incarca XLSX cu DEVICE_NAME si comisioane",
@@ -61,46 +68,44 @@ if uploaded_com_file is not None:
         for _, row in com_df.iterrows():
             comisioane[row["DEVICE_NAME"]] = {"10+": float(row["COM_10"]), "<10": float(row["COM_LT10"])}
         save_json(COMISION_FILE, comisioane)
-        st.success(f"{len(com_df)} comisioane incarcate si salvate cu succes!")
+        st.success(f"{len(com_df)} comisioane incarcate si salvate!")
     else:
         st.error("Fisierul XLSX trebuie sa contina coloanele: DEVICE_NAME, COM_10, COM_LT10")
 
+# -----------------------------
 # 3️⃣ Administrare TID-uri existente
+# -----------------------------
 st.sidebar.subheader("🛠 Administrare TID-uri")
 if st.sidebar.button("Editeaza TID-uri existente"):
-    tid_df_edit = pd.DataFrame(list(tid_list.items()), columns=["TERMINAL_ID", "DEVICE_NAME"])
-    edited_df = st.data_editor(
-        tid_df_edit,
-        num_rows="dynamic",
-        use_container_width=True,
-        key="editor_tid"
-    )
-    if st.button("Salveaza TID-uri modificate"):
+    tid_df = pd.DataFrame(list(tid_list.items()), columns=["TERMINAL_ID", "DEVICE_NAME"])
+    edited_df = st.data_editor(tid_df, num_rows="dynamic", use_container_width=True)
+    if st.button("Salveaza modificari TID-uri"):
         tid_list = dict(zip(edited_df["TERMINAL_ID"], edited_df["DEVICE_NAME"]))
         save_json(TID_FILE, tid_list)
-        st.success("TID-urile au fost actualizate si salvate cu succes!")
+        st.success("TID-urile au fost actualizate!")
 
+# -----------------------------
 # 4️⃣ Upload CSV tranzactii
-st.subheader("📊 Incarca CSV tranzactii")
-uploaded_file = st.file_uploader("Incarca fisierul CSV de la banca", type=["csv"])
+# -----------------------------
+uploaded_file = st.file_uploader("📂 Incarca fisierul CSV de la banca", type=["csv"])
 if uploaded_file is not None:
+    # Citire CSV cu separator automat
     try:
         df = pd.read_csv(uploaded_file, sep=None, engine="python")
     except:
         df = pd.read_csv(uploaded_file, sep=";", encoding="latin1")
 
     # -----------------------------
-    # Curatare numeric corecta
+    # Curatare numeric
     # -----------------------------
     for col in ["TRANS_AMOUNT", "FEE_AMOUNT"]:
         if col in df.columns:
-            # Eliminam eventuale minusuri, inlocuim virgula cu punct
             df[col] = (
                 df[col].astype(str)
                 .str.replace("-", "", regex=False)
                 .str.replace(",", ".", regex=False)
+                .str.replace(r"\s", "", regex=True)
             )
-            # Convertim numeric si rotunjim la 2 zecimale
             df[col] = pd.to_numeric(df[col], errors="coerce").round(2)
 
     # -----------------------------
@@ -120,7 +125,7 @@ if uploaded_file is not None:
             else:
                 return round(amt * comisioane[device]["<10"] / 100, 2)
         else:
-            # default: 1% pentru ≥10, 2% pentru <10
+            # Comision default daca clientul nu are setari
             if amt >= 10:
                 return round(amt * 1 / 100, 2)
             else:
@@ -138,9 +143,12 @@ if uploaded_file is not None:
         TOTAL_FEE=("FEE_AMOUNT", "sum")
     ).reset_index()
 
-    grouped["TOTAL_TRANS_AMOUNT"] = grouped["TOTAL_TRANS_AMOUNT"].round(2)
-    grouped["TOTAL_COMISION"] = grouped["TOTAL_COMISION"].round(2)
-    grouped["TOTAL_FEE"] = grouped["TOTAL_FEE"].round(2)
+    # -----------------------------
+    # Format numeric cu 2 zecimale
+    # -----------------------------
+    grouped["TOTAL_TRANS_AMOUNT"] = grouped["TOTAL_TRANS_AMOUNT"].map("{:.2f}".format)
+    grouped["TOTAL_COMISION"] = grouped["TOTAL_COMISION"].map("{:.2f}".format)
+    grouped["TOTAL_FEE"] = grouped["TOTAL_FEE"].map("{:.2f}".format)
 
     # -----------------------------
     # Afisare in Streamlit
@@ -151,7 +159,7 @@ if uploaded_file is not None:
     # -----------------------------
     # Export CSV detaliat
     # -----------------------------
-    csv_detaliat = df.to_csv(index=False).encode("utf-8")
+    csv_detaliat = df.to_csv(index=False, sep=";", encoding="utf-8")
     st.download_button(
         "⬇️ Descarca fisierul detaliat",
         csv_detaliat,
@@ -162,7 +170,7 @@ if uploaded_file is not None:
     # -----------------------------
     # Export CSV centralizare
     # -----------------------------
-    csv_centralizat = grouped.to_csv(index=False).encode("utf-8")
+    csv_centralizat = grouped.to_csv(index=False, sep=";", encoding="utf-8")
     st.download_button(
         "⬇️ Descarca centralizarea",
         csv_centralizat,
