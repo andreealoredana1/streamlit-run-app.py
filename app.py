@@ -1,6 +1,6 @@
-import streamlit as st
-import pandas as pd
-import io
+ streamlit st
+pandas pd
+ io
 
 st.set_page_config(page_title="Centralizator Tranzactii", layout="wide")
 
@@ -18,21 +18,19 @@ terminal_file = st.file_uploader(
     type=["csv", "xlsx"]
 )
 
-if uploaded_file is not None:
-
     # Citire fisier robusta
-    try:
+  
         stringio = io.StringIO(uploaded_file.getvalue().decode("utf-8"))
-        df = pd.read_csv(stringio, sep=None, engine="python")
-    except:
-        try:
+        df = pd.read_csv(stringio, sep=, engine="python")
+    
+      
             stringio = io.StringIO(uploaded_file.getvalue().decode("utf-16"))
             df = pd.read_csv(stringio, sep=";")
-        except:
+   
             df = pd.read_csv(uploaded_file, sep=";", encoding="latin1")
 
     # Curatare coloane numerice
-    if "TRANS_AMOUNT" in df.columns:
+     "TRANS_AMOUNT" df.columns:
         df["TRANS_AMOUNT"] = (
             df["TRANS_AMOUNT"]
             .astype(str)
