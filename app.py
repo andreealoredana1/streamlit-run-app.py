@@ -2,172 +2,216 @@ import streamlit as st
 import pandas as pd
 import json
 import os
-
-st.set_page_config(page_title="Centralizator Tranzactii POS", layout="wide")
-st.title("📊 Centralizator Tranzactii POS")
+import sqlite3
+from io import BytesIO
+import plotly.express as px
 
 # -----------------------------
-# Fisiere persistenta
+# PAROLA ACCES
+# -----------------------------
+def check_password():
+    def password_entered():
+        if st.session_state["password"] == "admin123":
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.text_input("Parola", type="password", on_change=password_entered, key="password")
+        return False
+    elif not st.session_state["password_correct"]:
+        st.text_input("Parola", type="password", on_change=password_entered, key="password")
+        st.error("Parola gresita")
+        return False
+    else:
+        return True
+
+if not check_password():
+    st.stop()
+
+# -----------------------------
+# CONFIG PAGINA
+# -----------------------------
+st.set_page_config(page_title="Centralizator POS PRO", layout="wide")
+st.title("📊 Centralizator Tranzactii POS - PRO")
+
+# -----------------------------
+# BAZA DE DATE SQLITE
+# -----------------------------
+conn = sqlite3.connect("centralizator.db", check_same_thread=False)
+c = conn.cursor()
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS comisioane (
+    device_name TEXT PRIMARY KEY,
+    com_10 REAL,
+    com_10m REAL
+)
+""")
+conn.commit()
+
+# -----------------------------
+# FISIER TID JSON
 # -----------------------------
 TID_FILE = "tid_list.json"
-COMISION_FILE = "comisioane.json"
 
 def load_json(file, default):
     if os.path.exists(file):
         with open(file, "r", encoding="utf-8") as f:
             return json.load(f)
-    else:
-        return default
+    return default
 
 def save_json(file, data):
     with open(file, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-tid_list = load_json(TID_FILE, {})          # TERMINAL_ID -> DEVICE_NAME
-comisioane = load_json(COMISION_FILE, {})   # DEVICE_NAME -> {"10+": %, "<10": %}
+tid_list = load_json(TID_FILE, {})
 
 # -----------------------------
-# Sidebar: Adaugare manuala TID
+# SIDEBAR TID
 # -----------------------------
-st.sidebar.header("➕ Adauga TID manual")
+st.sidebar.header("➕ Adauga TID")
 with st.sidebar.form("form_tid"):
     new_tid = st.text_input("TERMINAL_ID")
     new_device = st.text_input("DEVICE_NAME")
     submitted = st.form_submit_button("Adauga")
-    if submitted:
-        if new_tid and new_device:
-            tid_list[new_tid] = new_device
-            save_json(TID_FILE, tid_list)
-            st.success(f"TID {new_tid} salvat cu DEVICE_NAME {new_device}")
 
-# -----------------------------
-# Sidebar: Seteaza comisioane
-# -----------------------------
-st.sidebar.header("💰 Seteaza comisioane per client")
-with st.sidebar.form("form_com"):
-    device = st.text_input("DEVICE_NAME pentru comision")
-    com_10 = st.number_input("Comision ≥10 RON (%)", min_value=0.0, format="%.2f")
-    com_10m = st.number_input("Comision <10 RON (%)", min_value=0.0, format="%.2f")
-    submitted_com = st.form_submit_button("Salveaza comision")
-    if submitted_com:
-        if device:
-            comisioane[device] = {"10+": com_10, "<10": com_10m}
-            save_json(COMISION_FILE, comisioane)
-            st.success(f"Comisioane pentru {device} salvate!")
-
-# -----------------------------
-# Sidebar: Administrare TID-uri
-# -----------------------------
-st.sidebar.header("🛠 Administrare TID-uri existente")
-if st.sidebar.button("Editeaza / Sterge TID-uri"):
-    st.subheader("Lista TID-uri salvate")
-    tid_df = pd.DataFrame(list(tid_list.items()), columns=["TERMINAL_ID", "DEVICE_NAME"])
-    edited_df = st.data_editor(
-        tid_df,
-        num_rows="dynamic",
-        use_container_width=True,
-        key="editor_tid"
-    )
-    st.write("✅ Apasa butonul pentru a salva modificarile")
-    if st.button("Salveaza TID-uri modificate"):
-        tid_list = dict(zip(edited_df["TERMINAL_ID"], edited_df["DEVICE_NAME"]))
+    if submitted and new_tid and new_device:
+        tid_list[new_tid] = new_device
         save_json(TID_FILE, tid_list)
-        st.success("TID-urile au fost actualizate si salvate cu succes!")
+        st.sidebar.success("TID salvat!")
 
 # -----------------------------
-# Upload CSV
+# SIDEBAR COMISIOANE (EDITABILE)
 # -----------------------------
-uploaded_file = st.file_uploader("Incarca fisierul CSV de la banca", type=["csv"])
+st.sidebar.header("💰 Seteaza / Editeaza Comisioane")
+
+com_df = pd.read_sql("SELECT * FROM comisioane", conn)
+
+if not com_df.empty:
+    edited_com_df = st.sidebar.data_editor(
+        com_df,
+        num_rows="dynamic",
+        use_container_width=True
+    )
+
+    if st.sidebar.button("Salveaza Comisioane"):
+        c.execute("DELETE FROM comisioane")
+        for _, row in edited_com_df.iterrows():
+            c.execute(
+                "INSERT INTO comisioane VALUES (?, ?, ?)",
+                (row["device_name"], row["com_10"], row["com_10m"])
+            )
+        conn.commit()
+        st.sidebar.success("Comisioane actualizate!")
+else:
+    st.sidebar.info("Nu exista comisioane salvate.")
+
+# -----------------------------
+# UPLOAD CSV
+# -----------------------------
+uploaded_file = st.file_uploader("Incarca fisier CSV banca", type=["csv"])
+
 if uploaded_file is not None:
-    try:
-        df = pd.read_csv(uploaded_file, sep=None, engine="python")
-    except:
-        df = pd.read_csv(uploaded_file, sep=";", encoding="latin1")
+
+    df = pd.read_csv(uploaded_file, sep=None, engine="python")
 
     # -----------------------------
-    # Curatare numeric
+    # VALIDARE COLOANE
+    # -----------------------------
+    required_cols = ["TERMINAL_ID", "TRANS_AMOUNT"]
+    missing = [c for c in required_cols if c not in df.columns]
+
+    if missing:
+        st.error(f"Lipsesc coloane obligatorii: {missing}")
+        st.stop()
+
+    # -----------------------------
+    # CURATARE NUMERICA
     # -----------------------------
     for col in ["TRANS_AMOUNT", "FEE_AMOUNT"]:
         if col in df.columns:
             df[col] = (
                 df[col].astype(str)
-                .str.replace("-", "", regex=False)
                 .str.replace(".", "", regex=False)
                 .str.replace(",", ".", regex=False)
             )
             df[col] = pd.to_numeric(df[col], errors="coerce").round(2)
 
-    # -----------------------------
-    # Adaugare DEVICE_NAME din lista TID
-    # -----------------------------
-    df["DEVICE_NAME"] = df["TERMINAL_ID"].map(tid_list).fillna(df.get("DEVICE_NAME", ""))
+    # FEE fara minus
+    if "FEE_AMOUNT" in df.columns:
+        df["FEE_AMOUNT"] = df["FEE_AMOUNT"].abs()
 
     # -----------------------------
-    # Calcul comision per tranzactie
+    # MAPARE DEVICE_NAME
     # -----------------------------
-    def calc_comision(row):
-        device = row["DEVICE_NAME"]
-        amt = row["TRANS_AMOUNT"]
-        if device in comisioane:
-            if amt >= 10:
-                return round(amt * comisioane[device]["10+"] / 100, 2)
-            else:
-                return round(amt * comisioane[device]["<10"] / 100, 2)
-        else:
-            if amt >= 10:
-                return round(amt * 1 / 100, 2)
-            else:
-                return round(amt * 2 / 100, 2)
-
-    df["COMISION_CALCULAT"] = df.apply(calc_comision, axis=1)
+    df["DEVICE_NAME"] = df["TERMINAL_ID"].map(tid_list).fillna("NEASIGNAT")
 
     # -----------------------------
-    # Grupare per TERMINAL_ID + DEVICE_NAME
+    # FILTRARE DATA (daca exista)
     # -----------------------------
-    grouped = df.groupby(["TERMINAL_ID", "DEVICE_NAME"]).agg(
+    if "DATE" in df.columns:
+        df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
+        selected_date = st.date_input(
+            "Selecteaza data",
+            value=df["DATE"].min()
+        )
+        df = df[df["DATE"].dt.date == selected_date]
+
+    # -----------------------------
+    # CENTRALIZARE PER CLIENT
+    # -----------------------------
+    grouped = df.groupby("DEVICE_NAME").agg(
         TOTAL_TRANS_AMOUNT=("TRANS_AMOUNT", "sum"),
-        TOTAL_COMISION=("COMISION_CALCULAT", "sum"),
-        NR_TRANZACTII=("TRANSACTION_ID", "count"),
-        TOTAL_FEE=("FEE_AMOUNT", "sum")
+        TOTAL_FEE=("FEE_AMOUNT", "sum"),
+        NR_TRANZACTII=("TRANS_AMOUNT", "count")
     ).reset_index()
 
-    grouped["TOTAL_TRANS_AMOUNT"] = grouped["TOTAL_TRANS_AMOUNT"].round(2)
-    grouped["TOTAL_COMISION"] = grouped["TOTAL_COMISION"].round(2)
-    grouped["TOTAL_FEE"] = grouped["TOTAL_FEE"].round(2)
+    grouped = grouped.round(2)
 
-    # -----------------------------
-    # Afisare in Streamlit
-    # -----------------------------
-    st.subheader("📊 Centralizare per client (TID + DEVICE_NAME)")
+    st.subheader("📊 Centralizare per client")
     st.dataframe(grouped, use_container_width=True)
 
     # -----------------------------
-    # Export CSV detaliat pentru Excel cu virgula zecimala
+    # TOTAL GENERAL
     # -----------------------------
-    df_export = df.copy()
-    for col in ["TRANS_AMOUNT", "FEE_AMOUNT", "COMISION_CALCULAT"]:
-        if col in df_export.columns:
-            df_export[col] = df_export[col].apply(lambda x: f"{x:.2f}".replace('.', ','))
+    total_trans = grouped["TOTAL_TRANS_AMOUNT"].sum()
+    total_fee = grouped["TOTAL_FEE"].sum()
 
-    csv_detaliat = df_export.to_csv(index=False, sep=';', encoding='utf-8')
-    st.download_button(
-        "⬇️ Descarca fisierul detaliat",
-        csv_detaliat,
-        "export_detaliat.csv",
-        "text/csv"
+    procent_real = (total_fee / total_trans * 100) if total_trans != 0 else 0
+
+    st.markdown("---")
+    st.subheader("📊 Total General Zi")
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Vanzari", f"{total_trans:,.2f} RON")
+    col2.metric("Total Comisioane", f"{total_fee:,.2f} RON")
+    col3.metric("Procent Mediu Comision", f"{procent_real:.2f} %")
+
+    # -----------------------------
+    # GRAFIC INTERACTIV
+    # -----------------------------
+    fig = px.bar(
+        grouped,
+        x="DEVICE_NAME",
+        y="TOTAL_FEE",
+        title="Comisioane per client"
     )
 
-    # -----------------------------
-    # Export CSV centralizare cu virgula
-    # -----------------------------
-    grouped_export = grouped.copy()
-    for col in ["TOTAL_TRANS_AMOUNT", "TOTAL_COMISION", "TOTAL_FEE"]:
-        grouped_export[col] = grouped_export[col].apply(lambda x: f"{x:.2f}".replace('.', ','))
+    st.plotly_chart(fig, use_container_width=True)
 
-    csv_centralizat = grouped_export.to_csv(index=False, sep=';', encoding='utf-8')
+    # -----------------------------
+    # EXPORT EXCEL
+    # -----------------------------
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Detaliat')
+        grouped.to_excel(writer, index=False, sheet_name='Centralizat')
+
     st.download_button(
-        "⬇️ Descarca centralizarea",
-        csv_centralizat,
-        "centralizare_clienti.csv",
-        "text/csv"
+        "⬇️ Descarca Excel complet",
+        data=output.getvalue(),
+        file_name="centralizator_pos_pro.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
