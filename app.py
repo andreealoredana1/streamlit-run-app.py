@@ -6,30 +6,6 @@ import sqlite3
 from io import BytesIO
 
 # -----------------------------
-# PAROLA ACCES
-# -----------------------------
-def check_password():
-    def password_entered():
-        if st.session_state["password"] == "admin123":
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]
-        else:
-            st.session_state["password_correct"] = False
-
-    if "password_correct" not in st.session_state:
-        st.text_input("Parola", type="password", on_change=password_entered, key="password")
-        return False
-    elif not st.session_state["password_correct"]:
-        st.text_input("Parola", type="password", on_change=password_entered, key="password")
-        st.error("Parola gresita")
-        return False
-    else:
-        return True
-
-if not check_password():
-    st.stop()
-
-# -----------------------------
 # CONFIG PAGINA
 # -----------------------------
 st.set_page_config(page_title="Centralizator POS PRO", layout="wide")
@@ -178,7 +154,7 @@ if uploaded_file is not None:
     col2.metric("Total Comisioane", f"{total_fee:,.2f} RON")
     col3.metric("Procent Mediu Comision", f"{procent_real:.2f} %")
 
-    # GRAFIC STABIL (fara plotly)
+    # GRAFIC STABIL
     st.markdown("### 📈 Comisioane per client")
     st.bar_chart(
         grouped.set_index("DEVICE_NAME")["TOTAL_FEE"]
