@@ -45,7 +45,6 @@ if uploaded_tid:
     try:
         tid_df = pd.read_csv(uploaded_tid, sep=None, engine="python")
 
-        # Curatare nume coloane
         tid_df.columns = (
             tid_df.columns
             .str.strip()
@@ -54,7 +53,6 @@ if uploaded_tid:
             .str.replace("_", "")
         )
 
-        # Detectare coloane
         possible_tid_cols = [
             col for col in tid_df.columns
             if "terminal" in col or "tid" in col or "cod" in col
@@ -77,8 +75,7 @@ if uploaded_tid:
                 tid_list[row[tid_col]] = row[name_col]
 
             save_json(TID_FILE, tid_list)
-
-            st.sidebar.success(f"{len(tid_df)} TID-uri importate cu succes!")
+            st.sidebar.success(f"{len(tid_df)} TID-uri importate!")
 
         else:
             st.sidebar.error("Nu am putut identifica automat coloanele.")
@@ -103,9 +100,72 @@ with st.sidebar.form("form_tid"):
         st.sidebar.success("TID salvat!")
 
 # =============================
+# SIDEBAR - ADMIN TID PRO
+# =============================
+
+st.sidebar.markdown("---")
+st.sidebar.header("🛠 Administreaza TID-uri (PRO)")
+
+if tid_list:
+
+    tid_df = pd.DataFrame(
+        list(tid_list.items()),
+        columns=["TERMINAL_ID", "DEVICE_NAME"]
+    )
+
+    search_term = st.sidebar.text_input("🔍 Cauta TID sau Firma")
+
+    if search_term:
+        mask = (
+            tid_df["TERMINAL_ID"].str.contains(search_term, case=False, na=False)
+            | tid_df["DEVICE_NAME"].str.contains(search_term, case=False, na=False)
+        )
+        tid_df = tid_df[mask]
+
+    st.sidebar.caption(f"📊 Total firme salvate: {len(tid_list)}")
+
+    edited_tid_df = st.sidebar.data_editor(
+        tid_df,
+        num_rows="dynamic",
+        use_container_width=True,
+        key="editor_tid_pro"
+    )
+
+    if st.sidebar.button("💾 Salveaza modificarile"):
+        edited_tid_df = edited_tid_df.dropna()
+
+        tid_list = dict(
+            zip(
+                edited_tid_df["TERMINAL_ID"].astype(str),
+                edited_tid_df["DEVICE_NAME"].astype(str)
+            )
+        )
+
+        save_json(TID_FILE, tid_list)
+        st.sidebar.success("TID-urile au fost actualizate!")
+
+    csv_tid_export = tid_df.to_csv(index=False, sep=";")
+
+    st.sidebar.download_button(
+        "📤 Exporta TID-uri CSV",
+        csv_tid_export,
+        "tiduri_export.csv",
+        "text/csv"
+    )
+
+    if st.sidebar.button("🗑 Sterge toate TID-urile"):
+        tid_list.clear()
+        save_json(TID_FILE, tid_list)
+        st.sidebar.warning("Toate TID-urile au fost sterse!")
+
+else:
+    st.sidebar.info("Nu exista TID-uri salvate.")
+
+# =============================
 # SIDEBAR - SETARE COMISIOANE
 # =============================
 
+st.sidebar.markdown("---")
 st.sidebar.header("💰 Seteaza / Editeaza comisioane")
 
 with st.sidebar.form("form_com"):
@@ -115,10 +175,7 @@ with st.sidebar.form("form_com"):
     save_com = st.form_submit_button("Salveaza")
 
     if save_com and device:
-        comisioane[device] = {
-            "10+": com_10,
-            "<10": com_sub10
-        }
+        comisioane[device] = {"10+": com_10, "<10": com_sub10}
         save_json(COMISION_FILE, comisioane)
         st.sidebar.success("Comision salvat!")
 
@@ -135,7 +192,6 @@ if uploaded_file:
     except:
         df = pd.read_csv(uploaded_file, sep=";", encoding="latin1")
 
-    # Curatare valori numerice
     for col in ["TRANS_AMOUNT", "FEE_AMOUNT"]:
         if col in df.columns:
             df[col] = (
@@ -146,11 +202,9 @@ if uploaded_file:
             )
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-    # Mapare firma
     df["TERMINAL_ID"] = df["TERMINAL_ID"].astype(str)
     df["DEVICE_NAME"] = df["TERMINAL_ID"].map(tid_list).fillna("NEASOCIAT")
 
-    # Calcul comision
     def calc_comision(row):
         device = row["DEVICE_NAME"]
         amt = row["TRANS_AMOUNT"]
@@ -161,16 +215,9 @@ if uploaded_file:
             else:
                 return round(amt * comisioane[device]["<10"] / 100, 2)
         else:
-            if amt >= 10:
-                return round(amt * 1 / 100, 2)
-            else:
-                return round(amt * 2 / 100, 2)
+            return round(amt * (1 if amt >= 10 else 2) / 100, 2)
 
     df["COMISION_CALCULAT"] = df.apply(calc_comision, axis=1)
-
-    # =============================
-    # CENTRALIZARE PER CLIENT
-    # =============================
 
     grouped = df.groupby("DEVICE_NAME").agg(
         TOTAL_TRANS_AMOUNT=("TRANS_AMOUNT", "sum"),
@@ -182,10 +229,6 @@ if uploaded_file:
 
     st.subheader("📊 Centralizare per client")
     st.dataframe(grouped, use_container_width=True)
-
-    # =============================
-    # TOTAL GENERAL
-    # =============================
 
     total_trans = grouped["TOTAL_TRANS_AMOUNT"].sum()
     total_fee = grouped["TOTAL_FEE"].sum()
@@ -200,10 +243,6 @@ if uploaded_file:
     col1.metric("Total Tranzactii", f"{total_trans:,.2f} RON")
     col2.metric("Total Comisioane Banca", f"{total_fee:,.2f} RON")
     col3.metric("Procent Real Comision", f"{procent_real}%")
-
-    # =============================
-    # EXPORT CSV
-    # =============================
 
     grouped_export = grouped.copy()
 
