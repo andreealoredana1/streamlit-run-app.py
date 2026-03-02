@@ -4,7 +4,6 @@ import json
 import os
 import sqlite3
 from io import BytesIO
-import plotly.express as px
 
 # -----------------------------
 # PAROLA ACCES
@@ -83,7 +82,7 @@ with st.sidebar.form("form_tid"):
         st.sidebar.success("TID salvat!")
 
 # -----------------------------
-# SIDEBAR COMISIOANE (EDITABILE)
+# SIDEBAR COMISIOANE EDITABILE
 # -----------------------------
 st.sidebar.header("💰 Seteaza / Editeaza Comisioane")
 
@@ -117,9 +116,7 @@ if uploaded_file is not None:
 
     df = pd.read_csv(uploaded_file, sep=None, engine="python")
 
-    # -----------------------------
     # VALIDARE COLOANE
-    # -----------------------------
     required_cols = ["TERMINAL_ID", "TRANS_AMOUNT"]
     missing = [c for c in required_cols if c not in df.columns]
 
@@ -127,9 +124,7 @@ if uploaded_file is not None:
         st.error(f"Lipsesc coloane obligatorii: {missing}")
         st.stop()
 
-    # -----------------------------
     # CURATARE NUMERICA
-    # -----------------------------
     for col in ["TRANS_AMOUNT", "FEE_AMOUNT"]:
         if col in df.columns:
             df[col] = (
@@ -142,15 +137,13 @@ if uploaded_file is not None:
     # FEE fara minus
     if "FEE_AMOUNT" in df.columns:
         df["FEE_AMOUNT"] = df["FEE_AMOUNT"].abs()
+    else:
+        df["FEE_AMOUNT"] = 0
 
-    # -----------------------------
     # MAPARE DEVICE_NAME
-    # -----------------------------
     df["DEVICE_NAME"] = df["TERMINAL_ID"].map(tid_list).fillna("NEASIGNAT")
 
-    # -----------------------------
     # FILTRARE DATA (daca exista)
-    # -----------------------------
     if "DATE" in df.columns:
         df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
         selected_date = st.date_input(
@@ -159,9 +152,7 @@ if uploaded_file is not None:
         )
         df = df[df["DATE"].dt.date == selected_date]
 
-    # -----------------------------
     # CENTRALIZARE PER CLIENT
-    # -----------------------------
     grouped = df.groupby("DEVICE_NAME").agg(
         TOTAL_TRANS_AMOUNT=("TRANS_AMOUNT", "sum"),
         TOTAL_FEE=("FEE_AMOUNT", "sum"),
@@ -173,9 +164,7 @@ if uploaded_file is not None:
     st.subheader("📊 Centralizare per client")
     st.dataframe(grouped, use_container_width=True)
 
-    # -----------------------------
     # TOTAL GENERAL
-    # -----------------------------
     total_trans = grouped["TOTAL_TRANS_AMOUNT"].sum()
     total_fee = grouped["TOTAL_FEE"].sum()
 
@@ -189,21 +178,13 @@ if uploaded_file is not None:
     col2.metric("Total Comisioane", f"{total_fee:,.2f} RON")
     col3.metric("Procent Mediu Comision", f"{procent_real:.2f} %")
 
-    # -----------------------------
-    # GRAFIC INTERACTIV
-    # -----------------------------
-    fig = px.bar(
-        grouped,
-        x="DEVICE_NAME",
-        y="TOTAL_FEE",
-        title="Comisioane per client"
+    # GRAFIC STABIL (fara plotly)
+    st.markdown("### 📈 Comisioane per client")
+    st.bar_chart(
+        grouped.set_index("DEVICE_NAME")["TOTAL_FEE"]
     )
 
-    st.plotly_chart(fig, use_container_width=True)
-
-    # -----------------------------
     # EXPORT EXCEL
-    # -----------------------------
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Detaliat')
