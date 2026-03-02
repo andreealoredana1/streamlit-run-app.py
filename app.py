@@ -11,7 +11,7 @@ st.set_page_config(page_title="Centralizator POS PRO", layout="wide")
 st.title("📊 Centralizator Tranzactii POS - PRO")
 
 # -----------------------------
-# BAZA DE DATE SQLITE (pentru comisioane)
+# BAZA DE DATE SQLITE (COMISIOANE)
 # -----------------------------
 conn = sqlite3.connect("centralizator.db", check_same_thread=False)
 c = conn.cursor()
@@ -42,23 +42,56 @@ def save_json(file, data):
 
 tid_list = load_json(TID_FILE, {})
 
-# -----------------------------
-# SIDEBAR - ADAUGARE TID
-# -----------------------------
-st.sidebar.header("➕ Adauga TID")
+# =============================
+# SIDEBAR - TID
+# =============================
+st.sidebar.header("🏷 Gestionare TID-uri")
+
+# 🔹 Adaugare manuala
 with st.sidebar.form("form_tid"):
     new_tid = st.text_input("TERMINAL_ID")
     new_device = st.text_input("DEVICE_NAME")
-    submitted = st.form_submit_button("Adauga")
+    submitted = st.form_submit_button("Adauga TID manual")
 
     if submitted and new_tid and new_device:
-        tid_list[new_tid] = new_device
+        tid_list[str(new_tid)] = new_device
         save_json(TID_FILE, tid_list)
-        st.sidebar.success("TID salvat!")
+        st.sidebar.success("TID salvat manual!")
 
-# -----------------------------
-# SIDEBAR - EDITARE COMISIOANE
-# -----------------------------
+# 🔹 Import din Excel
+st.sidebar.markdown("---")
+st.sidebar.subheader("📥 Import TID din Excel")
+
+uploaded_tid_file = st.sidebar.file_uploader(
+    "Incarca fisier Excel (TERMINAL_ID, DEVICE_NAME)",
+    type=["xlsx"]
+)
+
+if uploaded_tid_file is not None:
+    try:
+        tid_excel = pd.read_excel(uploaded_tid_file)
+
+        if "TERMINAL_ID" in tid_excel.columns and "DEVICE_NAME" in tid_excel.columns:
+
+            tid_excel["TERMINAL_ID"] = tid_excel["TERMINAL_ID"].astype(str)
+            tid_excel["DEVICE_NAME"] = tid_excel["DEVICE_NAME"].astype(str)
+
+            for _, row in tid_excel.iterrows():
+                tid_list[row["TERMINAL_ID"]] = row["DEVICE_NAME"]
+
+            save_json(TID_FILE, tid_list)
+            st.sidebar.success(f"Import reusit! {len(tid_excel)} TID-uri salvate.")
+
+        else:
+            st.sidebar.error("Fisierul trebuie sa contina: TERMINAL_ID si DEVICE_NAME")
+
+    except Exception as e:
+        st.sidebar.error(f"Eroare la citire: {e}")
+
+# =============================
+# SIDEBAR - COMISIOANE
+# =============================
+st.sidebar.markdown("---")
 st.sidebar.header("💰 Seteaza / Editeaza Comisioane")
 
 com_df = pd.read_sql("SELECT * FROM comisioane", conn)
@@ -79,16 +112,16 @@ if st.sidebar.button("Salveaza Comisioane"):
     conn.commit()
     st.sidebar.success("Comisioane actualizate!")
 
-# -----------------------------
-# UPLOAD CSV
-# -----------------------------
-uploaded_file = st.file_uploader("Incarca fisier CSV banca", type=["csv"])
+# =============================
+# UPLOAD CSV BANCA
+# =============================
+uploaded_file = st.file_uploader("📂 Incarca fisier CSV banca", type=["csv"])
 
 if uploaded_file is not None:
 
     df = pd.read_csv(uploaded_file, sep=None, engine="python")
 
-    # VALIDARE COLOANE OBLIGATORII
+    # VALIDARE
     required_cols = ["TERMINAL_ID", "TRANS_AMOUNT"]
     missing = [c for c in required_cols if c not in df.columns]
 
@@ -112,7 +145,8 @@ if uploaded_file is not None:
     else:
         df["FEE_AMOUNT"] = 0
 
-    # MAPARE DEVICE_NAME
+    # MAPARE AUTOMATA TID -> DEVICE_NAME
+    df["TERMINAL_ID"] = df["TERMINAL_ID"].astype(str)
     df["DEVICE_NAME"] = df["TERMINAL_ID"].map(tid_list).fillna("NEASIGNAT")
 
     # FILTRARE PE DATA (daca exista)
@@ -150,13 +184,13 @@ if uploaded_file is not None:
     col2.metric("Total Comisioane", f"{total_fee:,.2f} RON")
     col3.metric("Procent Mediu Comision", f"{procent_real:.2f} %")
 
-    # GRAFIC STABIL
+    # GRAFIC
     st.markdown("### 📈 Comisioane per client")
     st.bar_chart(
         grouped.set_index("DEVICE_NAME")["TOTAL_FEE"]
     )
 
-    # EXPORT CSV (SUPER STABIL)
+    # EXPORT CSV
     st.markdown("### 📥 Export")
 
     csv_detaliat = df.to_csv(index=False, sep=';').encode('utf-8')
