@@ -3,7 +3,6 @@ import pandas as pd
 import json
 import os
 import sqlite3
-from io import BytesIO
 
 # -----------------------------
 # CONFIG PAGINA
@@ -12,7 +11,7 @@ st.set_page_config(page_title="Centralizator POS PRO", layout="wide")
 st.title("📊 Centralizator Tranzactii POS - PRO")
 
 # -----------------------------
-# BAZA DE DATE SQLITE
+# BAZA DE DATE SQLITE (pentru comisioane)
 # -----------------------------
 conn = sqlite3.connect("centralizator.db", check_same_thread=False)
 c = conn.cursor()
@@ -44,7 +43,7 @@ def save_json(file, data):
 tid_list = load_json(TID_FILE, {})
 
 # -----------------------------
-# SIDEBAR TID
+# SIDEBAR - ADAUGARE TID
 # -----------------------------
 st.sidebar.header("➕ Adauga TID")
 with st.sidebar.form("form_tid"):
@@ -58,30 +57,27 @@ with st.sidebar.form("form_tid"):
         st.sidebar.success("TID salvat!")
 
 # -----------------------------
-# SIDEBAR COMISIOANE EDITABILE
+# SIDEBAR - EDITARE COMISIOANE
 # -----------------------------
 st.sidebar.header("💰 Seteaza / Editeaza Comisioane")
 
 com_df = pd.read_sql("SELECT * FROM comisioane", conn)
 
-if not com_df.empty:
-    edited_com_df = st.sidebar.data_editor(
-        com_df,
-        num_rows="dynamic",
-        use_container_width=True
-    )
+edited_com_df = st.sidebar.data_editor(
+    com_df,
+    num_rows="dynamic",
+    use_container_width=True
+)
 
-    if st.sidebar.button("Salveaza Comisioane"):
-        c.execute("DELETE FROM comisioane")
-        for _, row in edited_com_df.iterrows():
-            c.execute(
-                "INSERT INTO comisioane VALUES (?, ?, ?)",
-                (row["device_name"], row["com_10"], row["com_10m"])
-            )
-        conn.commit()
-        st.sidebar.success("Comisioane actualizate!")
-else:
-    st.sidebar.info("Nu exista comisioane salvate.")
+if st.sidebar.button("Salveaza Comisioane"):
+    c.execute("DELETE FROM comisioane")
+    for _, row in edited_com_df.iterrows():
+        c.execute(
+            "INSERT INTO comisioane VALUES (?, ?, ?)",
+            (row["device_name"], row["com_10"], row["com_10m"])
+        )
+    conn.commit()
+    st.sidebar.success("Comisioane actualizate!")
 
 # -----------------------------
 # UPLOAD CSV
@@ -92,7 +88,7 @@ if uploaded_file is not None:
 
     df = pd.read_csv(uploaded_file, sep=None, engine="python")
 
-    # VALIDARE COLOANE
+    # VALIDARE COLOANE OBLIGATORII
     required_cols = ["TERMINAL_ID", "TRANS_AMOUNT"]
     missing = [c for c in required_cols if c not in df.columns]
 
@@ -119,7 +115,7 @@ if uploaded_file is not None:
     # MAPARE DEVICE_NAME
     df["DEVICE_NAME"] = df["TERMINAL_ID"].map(tid_list).fillna("NEASIGNAT")
 
-    # FILTRARE DATA (daca exista)
+    # FILTRARE PE DATA (daca exista)
     if "DATE" in df.columns:
         df["DATE"] = pd.to_datetime(df["DATE"], errors="coerce")
         selected_date = st.date_input(
@@ -160,15 +156,21 @@ if uploaded_file is not None:
         grouped.set_index("DEVICE_NAME")["TOTAL_FEE"]
     )
 
-    # EXPORT EXCEL
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Detaliat')
-        grouped.to_excel(writer, index=False, sheet_name='Centralizat')
+    # EXPORT CSV (SUPER STABIL)
+    st.markdown("### 📥 Export")
 
+    csv_detaliat = df.to_csv(index=False, sep=';').encode('utf-8')
     st.download_button(
-        "⬇️ Descarca Excel complet",
-        data=output.getvalue(),
-        file_name="centralizator_pos_pro.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        "⬇️ Descarca Detaliat CSV",
+        csv_detaliat,
+        "detaliat.csv",
+        "text/csv"
+    )
+
+    csv_centralizat = grouped.to_csv(index=False, sep=';').encode('utf-8')
+    st.download_button(
+        "⬇️ Descarca Centralizat CSV",
+        csv_centralizat,
+        "centralizat.csv",
+        "text/csv"
     )
