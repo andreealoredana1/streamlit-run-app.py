@@ -49,21 +49,17 @@ if uploaded_tid:
             st.sidebar.success("TID-uri importate!")
         else:
             st.sidebar.error("CSV trebuie sa contina TERMINAL_ID si DEVICE_NAME")
+
     except Exception as e:
         st.sidebar.error(f"Eroare: {e}")
 
-# Afisare + editare TID
 if st.sidebar.checkbox("Vezi / Editeaza TID-uri"):
-    tid_df = pd.DataFrame(
-        list(tid_list.items()),
-        columns=["TERMINAL_ID", "DEVICE_NAME"]
-    )
+    tid_df = pd.DataFrame(list(tid_list.items()), columns=["TERMINAL_ID", "DEVICE_NAME"])
 
     edited_tid = st.sidebar.data_editor(
         tid_df,
         num_rows="dynamic",
-        use_container_width=True,
-        key="editor_tid"
+        use_container_width=True
     )
 
     if st.sidebar.button("Salveaza TID-uri"):
@@ -106,7 +102,6 @@ if uploaded_com:
     except Exception as e:
         st.sidebar.error(f"Eroare: {e}")
 
-# Afisare + editare Comisioane
 if st.sidebar.checkbox("Vezi / Editeaza Comisioane"):
     com_df = pd.DataFrame([
         {
@@ -120,8 +115,7 @@ if st.sidebar.checkbox("Vezi / Editeaza Comisioane"):
     edited_com = st.sidebar.data_editor(
         com_df,
         num_rows="dynamic",
-        use_container_width=True,
-        key="editor_com"
+        use_container_width=True
     )
 
     if st.sidebar.button("Salveaza Comisioane"):
@@ -146,11 +140,12 @@ uploaded_file = st.file_uploader("📂 Incarca fisier CSV banca", type=["csv"])
 if uploaded_file:
     try:
         df = pd.read_csv(uploaded_file, sep=None, engine="python")
+        original_df = df.copy()
         df.columns = df.columns.str.lower()
 
         tid_col = next((c for c in df.columns if "terminal" in c or "tid" in c), None)
-        amount_col = next((c for c in df.columns if "amount" in c or "suma" in c), None)
-        fee_col = next((c for c in df.columns if "fee" in c or "comision" in c), None)
+        amount_col = next((c for c in df.columns if "amount" in c or "trans" in c), None)
+        fee_col = next((c for c in df.columns if "fee" in c), None)
 
         if not tid_col or not amount_col or not fee_col:
             st.error("Nu pot detecta coloanele necesare")
@@ -176,7 +171,6 @@ if uploaded_file:
                     return round(amt * comisioane[client]["10+"] / 100, 2)
                 else:
                     return round(amt * comisioane[client]["<10"] / 100, 2)
-
             return round(amt * 1 / 100, 2)
 
         df["COMISION_CALCULAT"] = df.apply(calc, axis=1)
@@ -210,10 +204,37 @@ if uploaded_file:
         else:
             st.success("✔ Comisioanele sunt corecte.")
 
+        # =============================
+        # EXPORT CENTRALIZARE
+        # =============================
+
         st.download_button(
             "⬇️ Descarca centralizare",
             grouped.to_csv(index=False, sep=";"),
             "centralizare.csv",
+            "text/csv"
+        )
+
+        # =============================
+        # EXPORT ORIGINAL CORECTAT
+        # =============================
+
+        df_export = original_df.copy()
+
+        fee_original_col = next((c for c in df_export.columns if "FEE" in c.upper()), None)
+
+        if fee_original_col:
+            df_export[fee_original_col] = (
+                df_export[fee_original_col]
+                .astype(str)
+                .str.replace("-", "", regex=False)
+                .str.replace(".", ",", regex=False)
+            )
+
+        st.download_button(
+            "⬇️ Descarca fisier identic (FEE corectat)",
+            df_export.to_csv(index=False, sep=';'),
+            "fisier_corectat.csv",
             "text/csv"
         )
 
